@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/hmac"
 	"crypto/sha1"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"github.com/dmarkwat/github-command/pkg/commands"
@@ -97,16 +98,15 @@ func handleIssueComment(event *github.IssueCommentEvent) error {
 	return nil
 }
 
-func digestsMatch(body []byte, webhookKey, signature string) error {
+func DigestsMatch(body []byte, webhookKey, signature string) error {
 	h := hmac.New(sha1.New, []byte(webhookKey))
 	_, err := h.Write(body)
 	if err != nil {
 		return err
 	}
-	sum := h.Sum(nil)
-	generated := fmt.Sprintf("sha1=%s", string(sum))
+	generated := fmt.Sprintf("sha1=%s", hex.EncodeToString(h.Sum(nil)))
 	if generated != signature {
-		return fmt.Errorf("signatures did not match")
+		return fmt.Errorf("signatures did not match: %s != %s", generated, signature)
 	}
 	return nil
 }
@@ -129,7 +129,7 @@ func HandleWebhook(resp http.ResponseWriter, req *http.Request, webhookKey strin
 		return
 	}
 
-	err = digestsMatch(body, webhookKey, signature)
+	err = DigestsMatch(body, webhookKey, signature)
 	if err != nil {
 		log.Print(err)
 		resp.WriteHeader(http.StatusForbidden)
