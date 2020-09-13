@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/hmac"
 	"crypto/sha1"
+	"crypto/subtle"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -105,7 +106,7 @@ func DigestsMatch(body []byte, webhookKey, signature string) error {
 		return err
 	}
 	generated := fmt.Sprintf("sha1=%s", hex.EncodeToString(h.Sum(nil)))
-	if generated != signature {
+	if subtle.ConstantTimeCompare([]byte(generated), []byte(signature)) != 1 {
 		return fmt.Errorf("signatures did not match: %s != %s", generated, signature)
 	}
 	return nil
@@ -138,12 +139,14 @@ func HandleWebhook(resp http.ResponseWriter, req *http.Request, webhookKey strin
 
 	err = json.Unmarshal(body, &event)
 	if err != nil {
+		log.Print(err)
 		resp.WriteHeader(http.StatusBadRequest)
 		return
 	}
 
 	payload, err := event.ParsePayload()
 	if err != nil {
+		log.Print(err)
 		resp.WriteHeader(http.StatusBadRequest)
 		return
 	}
@@ -152,9 +155,11 @@ func HandleWebhook(resp http.ResponseWriter, req *http.Request, webhookKey strin
 	case github.IssueCommentEvent:
 		err = handleIssueComment(&v)
 		if err != nil {
+			log.Print(err)
 			resp.WriteHeader(http.StatusInternalServerError)
 		}
 	default:
+		log.Printf("Unrecognized payload type: %v", v)
 		resp.WriteHeader(http.StatusBadRequest)
 	}
 }
