@@ -113,7 +113,12 @@ func DigestsMatch(body []byte, webhookKey, signature string) error {
 }
 
 func HandleWebhook(resp http.ResponseWriter, req *http.Request, webhookKey string) {
-	var event github.Event
+	if req.Header.Get("X-GitHub-Event") != "issue_comment" {
+		log.Printf("unsuppored webhook event type")
+		return
+	}
+
+	var event github.IssueCommentEvent
 
 	defer req.Body.Close()
 
@@ -144,22 +149,12 @@ func HandleWebhook(resp http.ResponseWriter, req *http.Request, webhookKey strin
 		return
 	}
 
-	payload, err := event.ParsePayload()
+	log.Printf("%+v", event)
+
+	err = handleIssueComment(&event)
 	if err != nil {
 		log.Print(err)
-		resp.WriteHeader(http.StatusBadRequest)
+		resp.WriteHeader(http.StatusInternalServerError)
 		return
-	}
-
-	switch v := payload.(type) {
-	case github.IssueCommentEvent:
-		err = handleIssueComment(&v)
-		if err != nil {
-			log.Print(err)
-			resp.WriteHeader(http.StatusInternalServerError)
-		}
-	default:
-		log.Printf("Unrecognized payload type: %v", v)
-		resp.WriteHeader(http.StatusBadRequest)
 	}
 }
